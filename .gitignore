@@ -1,0 +1,4 @@
+.venv/
+model_30.pth
+test_pred_30.xlsx
+cache/
