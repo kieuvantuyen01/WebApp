@@ -13,8 +13,20 @@
                     <img src="{{ url_for('static', filename=image_path) }}" class="card-img-top" alt="Medical Image">
                     <div class="card-body">
                         <h5 class="card-title">Question: {{ question }}</h5>
-                        <p class="card-text">Answer: {{ answer }}</p>
-                        <a href="{{ url_for('index') }}" class="btn btn-primary">Ask Another Question</a>
+                        <p class="card-text">Predicted Answer: {{ answer }}</p>
+                        
+                        {% if actual_answer %}
+                            <p class="card-text">Ground Truth Answer: {{ actual_answer }}</p>
+                            {% if is_correct %}
+                                <div class="alert alert-success">Prediction matches ground truth!</div>
+                            {% else %}
+                                <div class="alert alert-danger">Prediction differs from ground truth</div>
+                            {% endif %}
+                        {% else %}
+                            <p class="card-text text-muted">No ground truth data available for this question</p>
+                        {% endif %}
+                        
+                        <a href="{{ url_for('index') }}" class="btn btn-primary mt-3">Ask Another Question</a>
                     </div>
                 </div>
             </div>

@@ -1,14 +1,37 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for
 import os
 from PIL import Image
 import torch
+import pandas as pd
 from transformers import BlipProcessor, BlipForQuestionAnswering, BlipImageProcessor
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
 # Đảm bảo thư mục uploads tồn tại
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Load ground truth data
+try:
+    df_ground_truth = pd.read_excel('test_pred_30.xlsx')
+    print("Ground truth data loaded successfully!")
+except Exception as e:
+    print(f"Error loading ground truth data: {e}")
+    df_ground_truth = None
+
+def check_ground_truth(question, predicted_answer):
+    if df_ground_truth is None:
+        return None, None
+    
+    # Find the matching question in the dataset
+    matching_row = df_ground_truth[df_ground_truth['Question'].str.lower() == question.lower()]
+    
+    if not matching_row.empty:
+        actual_answer = matching_row['Actual'].iloc[0]
+        is_correct = predicted_answer.lower() == actual_answer.lower()
+        return actual_answer, is_correct
+    return None, None
 
 # Khởi tạo model và processor
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -38,6 +61,26 @@ except Exception as e:
 
 model.eval()
 
+# Tạo class để lưu lịch sử
+class History:
+    def __init__(self):
+        self.items = []
+    
+    def add_item(self, image_path, question, predicted_answer, actual_answer, timestamp):
+        self.items.append({
+            'image_path': image_path,
+            'question': question,
+            'predicted': predicted_answer,
+            'actual': actual_answer,
+            'timestamp': timestamp
+        })
+    
+    def get_items(self, limit=10):
+        return list(reversed(self.items[-limit:]))
+
+# Khởi tạo history
+history = History()
+
 @app.route('/', methods=['GET'])
 def index():
     return render_template('index.html')
@@ -66,12 +109,34 @@ def predict():
             input_ids=text_encoding['input_ids']
         )
     
-    answer = text_processor.decode(outputs[0], skip_special_tokens=True)
+    predicted_answer = text_processor.decode(outputs[0], skip_special_tokens=True)
+    
+    # Check ground truth
+    actual_answer, is_correct = check_ground_truth(question, predicted_answer)
+    
+    history.add_item(
+        image_path=os.path.join('uploads', file.filename),
+        question=question,
+        predicted_answer=predicted_answer,
+        actual_answer=actual_answer,
+        timestamp=datetime.now()
+    )
     
     return render_template('result.html', 
                          image_path=os.path.join('uploads', file.filename),
                          question=question,
-                         answer=answer)
+                         answer=predicted_answer,
+                         actual_answer=actual_answer,
+                         is_correct=is_correct)
+
+@app.route('/history')
+def view_history():
+    return render_template('history.html', items=history.get_items())
+
+@app.route('/clear_history', methods=['POST'])
+def clear_history():
+    history.items.clear()
+    return redirect(url_for('history'))
 
 if __name__ == '__main__':
     app.run(debug=True)
