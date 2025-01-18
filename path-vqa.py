@@ -1,5 +1,9 @@
 import huggingface_hub
-huggingface_hub.login("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")
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables from .env file
+huggingface_hub.login(os.getenv('HUGGINGFACE_TOKEN'))
 
 import pandas as pd
 from pathlib import Path
